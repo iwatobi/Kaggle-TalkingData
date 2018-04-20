@@ -11,11 +11,12 @@ logger = getLogger(__name__)
 TRAIN_CSV_PATH = '../input/train.csv'
 TEST_CSV_PATH = '../input/test.csv'
 SAMPLE_SUBMIT_CSV_PATH = '../input/sample_submission.csv'
-SUBMIT_CSV_PATH = '../output/submit.csv'
+SUBMIT_CSV_PATH = '../output/submit_xgb.csv'
 
 
 def load_data(csv_path):
     df = pd.read_csv(csv_path)
+    df['click_hour'] = pd.to_datetime(df['click_time']).dt.hour
     df.drop(columns=['click_time'], inplace=True)
     return df
 
@@ -50,7 +51,7 @@ def main():
         'colsample_bylevel': 0.8,
         'reg_alpha': 0.1,
         'learning_rate': 0.1,
-        'n_estimators': 500,
+        'n_estimators': 1000,
         'n_jobs': 16
     }
 
