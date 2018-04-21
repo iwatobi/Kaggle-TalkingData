@@ -48,8 +48,8 @@ def main():
         'metric': 'auc',
         'learning_rate': 0.05,
         'num_leaves': 255,
-        'max_depth': 9,
-        'min_child_samples': 100,
+        'max_depth': 5,
+        'min_child_samples': 20,
         'max_bin': 100,
         'subsample': 0.7,
         'subsample_freq': 1,
@@ -62,11 +62,12 @@ def main():
         'is_unbalance': True,
         'n_jobs': 16
     }
+    categorical_feature = [0, 1, 2, 3, 4, 5]
 
     # train model
     logger.info('train start')
     clf = lgb.LGBMClassifier(**params)
-    clf.fit(X_train, y_train)
+    clf.fit(X_train, y_train, categorical_feature=categorical_feature)
     logger.info('train end')
 
     # predict
