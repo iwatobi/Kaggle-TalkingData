@@ -8,7 +8,7 @@ Also taken ideas from various public kernels.
 """
 
 FILENO= 5 #To distinguish the output file name.
-debug=1  #Whethere or not in debuging mode
+debug=0  #Whethere or not in debuging mode
 
 import pandas as pd
 import time
@@ -16,8 +16,14 @@ import numpy as np
 from sklearn.model_selection import train_test_split
 import lightgbm as lgb
 import gc
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 import os
+
+from logging import getLogger
+from logging.config import fileConfig
+
+fileConfig('../conf/logging.conf', defaults={'logpath': '../logs/train.log'})
+logger = getLogger(__name__)
 
 ###### Feature extraction ######
 
@@ -26,7 +32,7 @@ import os
     ###Did some Cosmetic changes 
 predictors=[]
 def do_next_prev_Click( df,agg_suffix, agg_type='float32'):
-    print('Extracting new features...')
+    logger.info('Extracting new features...')
     df['hour'] = pd.to_datetime(df.click_time).dt.hour.astype('int8')
     df['day'] = pd.to_datetime(df.click_time).dt.day.astype('int8')
     
@@ -35,7 +41,7 @@ def do_next_prev_Click( df,agg_suffix, agg_type='float32'):
     predictors.append('minute')
     df['second'] = pd.to_datetime(df.click_time).dt.second.astype('int8')
     predictors.append('second')
-    print(f">> \nExtracting {agg_suffix} time calculation features...\n")
+    logger.info(f">> Extracting {agg_suffix} time calculation features...")
     
     GROUP_BY_NEXT_CLICKS = [
     
@@ -61,7 +67,7 @@ def do_next_prev_Click( df,agg_suffix, agg_type='float32'):
         all_features = spec['groupby'] + ['click_time']
 
         # Run calculation
-        print(f">> Grouping by {spec['groupby']}, and saving time to {agg_suffix} in: {new_feature}")
+        logger.info(f">> Grouping by {spec['groupby']}, and saving time to {agg_suffix} in: {new_feature}")
         if agg_suffix=="nextClick":
             df[new_feature] = (df[all_features].groupby(spec[
             'groupby']).click_time.shift(-1) - df.click_time).dt.seconds.astype(agg_type)
@@ -70,7 +76,7 @@ def do_next_prev_Click( df,agg_suffix, agg_type='float32'):
                 'groupby']).click_time.shift(+1) ).dt.seconds.astype(agg_type)
         predictors.append(new_feature)
         gc.collect()
-#         print('predictors',predictors)
+#         logger.info('predictors',predictors)
     return (df)
 
 
@@ -80,15 +86,15 @@ def do_next_prev_Click( df,agg_suffix, agg_type='float32'):
 def do_count( df, group_cols, agg_type='uint32', show_max=False, show_agg=True ):
     agg_name='{}count'.format('_'.join(group_cols))  
     if show_agg:
-        print( "\nAggregating by ", group_cols ,  '... and saved in', agg_name )
+        logger.info( "Aggregating by {} ... and saved in {}".format(group_cols, agg_name))
     gp = df[group_cols][group_cols].groupby(group_cols).size().rename(agg_name).to_frame().reset_index()
     df = df.merge(gp, on=group_cols, how='left')
     del gp
     if show_max:
-        print( agg_name + " max value = ", df[agg_name].max() )
+        logger.info("{}: max value = {}".format(agg_name, df[agg_name].max()))
     df[agg_name] = df[agg_name].astype(agg_type)
     predictors.append(agg_name)
-#     print('predictors',predictors)
+#     logger.info('predictors',predictors)
     gc.collect()
     return( df )
     
@@ -96,66 +102,66 @@ def do_count( df, group_cols, agg_type='uint32', show_max=False, show_agg=True )
 def do_countuniq( df, group_cols, counted, agg_type='uint32', show_max=False, show_agg=True ):
     agg_name= '{}_by_{}_countuniq'.format(('_'.join(group_cols)),(counted))  
     if show_agg:
-        print( "\nCounting unqiue ", counted, " by ", group_cols ,  '... and saved in', agg_name )
+        logger.info( "Counting unqiue {} by {} ... and saved in {}".format(counted, group_cols, agg_name))
     gp = df[group_cols+[counted]].groupby(group_cols)[counted].nunique().reset_index().rename(columns={counted:agg_name})
     df = df.merge(gp, on=group_cols, how='left')
     del gp
     if show_max:
-        print( agg_name + " max value = ", df[agg_name].max() )
+        logger.info("{}: max value = {}".format(agg_name, df[agg_name].max()))
     df[agg_name] = df[agg_name].astype(agg_type)
     predictors.append(agg_name)
-#     print('predictors',predictors)
+#     logger.info('predictors',predictors)
     gc.collect()
     return( df )
 ### Below a function is written to extract cumulative count feature  from different cols    
 def do_cumcount( df, group_cols, counted,agg_type='uint32', show_max=False, show_agg=True ):
     agg_name= '{}_by_{}_cumcount'.format(('_'.join(group_cols)),(counted)) 
     if show_agg:
-        print( "\nCumulative count by ", group_cols , '... and saved in', agg_name  )
+        logger.info( "Cumulative count by {} ... and saved in {}".format(group_cols, agg_name))
     gp = df[group_cols+[counted]].groupby(group_cols)[counted].cumcount()
     df[agg_name]=gp.values
     del gp
     if show_max:
-        print( agg_name + " max value = ", df[agg_name].max() )
+        logger.info("{}: max value = {}".format(agg_name, df[agg_name].max()))
     df[agg_name] = df[agg_name].astype(agg_type)
     predictors.append(agg_name)
-#     print('predictors',predictors)
+#     logger.info('predictors',predictors)
     gc.collect()
     return( df )
 ### Below a function is written to extract mean feature  from different cols
 def do_mean( df, group_cols, counted, agg_type='float32', show_max=False, show_agg=True ):
     agg_name= '{}_by_{}_mean'.format(('_'.join(group_cols)),(counted))  
     if show_agg:
-        print( "\nCalculating mean of ", counted, " by ", group_cols , '... and saved in', agg_name )
+        logger.info("Calculating mean of {} by {} ... and saved in {}".format(counted, group_cols, agg_name))
     gp = df[group_cols+[counted]].groupby(group_cols)[counted].mean().reset_index().rename(columns={counted:agg_name})
     df = df.merge(gp, on=group_cols, how='left')
     del gp
     if show_max:
-        print( agg_name + " max value = ", df[agg_name].max() )
+        logger.info("{}: max value = {}".format(agg_name, df[agg_name].max()))
     df[agg_name] = df[agg_name].astype(agg_type)
     predictors.append(agg_name)
-#     print('predictors',predictors)
+#     logger.info('predictors',predictors)
     gc.collect()
     return( df )
 
 def do_var( df, group_cols, counted, agg_type='float32', show_max=False, show_agg=True ):
     agg_name= '{}_by_{}_var'.format(('_'.join(group_cols)),(counted)) 
     if show_agg:
-        print( "\nCalculating variance of ", counted, " by ", group_cols , '... and saved in', agg_name )
+        logger.info("Calculating variance of {} by {} ... and saved in {}".format(counted, group_cols, agg_name))
     gp = df[group_cols+[counted]].groupby(group_cols)[counted].var().reset_index().rename(columns={counted:agg_name})
     df = df.merge(gp, on=group_cols, how='left')
     del gp
     if show_max:
-        print( agg_name + " max value = ", df[agg_name].max() )
+        logger.info("{}: max value = {}".format(agg_name, df[agg_name].max()))
     df[agg_name] = df[agg_name].astype(agg_type)
     predictors.append(agg_name)
-#     print('predictors',predictors)
+#     logger.info('predictors',predictors)
     gc.collect()
     return( df )
 
 ###  A function is written to train the lightGBM model with different given parameters
 if debug:
-    print('*** debug parameter set: this is a test run for debugging purposes ***')
+    logger.info('*** debug parameter set: this is a test run for debugging purposes ***')
 
 def lgb_modelfit_nocv(params, dtrain, dvalid, predictors, target='target', objective='binary', metrics='auc',
                  feval=None, early_stopping_rounds=50, num_boost_round=3000, verbose_eval=10, categorical_features=None):
@@ -183,7 +189,7 @@ def lgb_modelfit_nocv(params, dtrain, dvalid, predictors, target='target', objec
 
     lgb_params.update(params)
 
-    print("preparing validation datasets")
+    logger.info("preparing validation datasets")
 
     xgtrain = lgb.Dataset(dtrain[predictors].values, label=dtrain[target].values,
                           feature_name=predictors,
@@ -206,9 +212,9 @@ def lgb_modelfit_nocv(params, dtrain, dvalid, predictors, target='target', objec
                      verbose_eval=10, 
                      feval=feval)
 
-    print("\nModel Report")
-    print("bst1.best_iteration: ", bst1.best_iteration)
-    print(metrics+":", evals_results['valid'][metrics][bst1.best_iteration-1])
+    logger.info("Model Report")
+    logger.info("bst1.best_iteration: {}".format(bst1.best_iteration))
+    logger.info("{}: {}".format(metrics, evals_results['valid'][metrics][bst1.best_iteration-1]))
 
     return (bst1,bst1.best_iteration)
     
@@ -227,10 +233,10 @@ def DO(frm,to,fileno):
             'click_id'      : 'uint32',
             }
 
-    print('loading train data...',frm,to)
+    logger.info('loading train data... {} {}'.format(frm,to))
     train_df = pd.read_csv("../input/train.csv", parse_dates=['click_time'], skiprows=range(1,frm), nrows=to-frm, dtype=dtypes, usecols=['ip','app','device','os', 'channel', 'click_time', 'is_attributed'])
 
-    print('loading test data...')
+    logger.info('loading test data...')
     if debug:
         test_df = pd.read_csv("../input/test.csv", nrows=100000, parse_dates=['click_time'], dtype=dtypes, usecols=['ip','app','device','os', 'channel', 'click_time', 'click_id'])
     else:
@@ -261,33 +267,33 @@ def DO(frm,to,fileno):
     train_df = do_var( train_df, ['ip', 'app', 'channel'], 'day'); gc.collect()
     train_df = do_mean( train_df, ['ip', 'app', 'channel'], 'hour' ); gc.collect()
     
-    print(train_df.head(5))
+    logger.debug(train_df.head(5))
     gc.collect()
     
     
-    print('\n\nBefore appending predictors...\n\n',sorted(predictors))
+    logger.info('Before appending predictors... {}'.format(sorted(predictors)))
     target = 'is_attributed'
     word= ['app','device','os', 'channel', 'hour', 'day','minute', 'second']
     for feature in word:
         if feature not in predictors:
             predictors.append(feature)
     categorical = ['app', 'device', 'os', 'channel', 'hour', 'day','minute', 'second']
-    print('\n\nAfter appending predictors...\n\n',sorted(predictors))
+    logger.info('After appending predictors... {}'.format(sorted(predictors)))
 
     test_df = train_df[len_train:]
     val_df = train_df[(len_train-val_size):len_train]
     train_df = train_df[:(len_train-val_size)]
 
-    print("\ntrain size: ", len(train_df))
-    print("\nvalid size: ", len(val_df))
-    print("\ntest size : ", len(test_df))
+    logger.info("train size: {}".format(len(train_df)))
+    logger.info("valid size: {}".format(len(val_df)))
+    logger.info("test size : {}".format(len(test_df)))
 
     sub = pd.DataFrame()
     sub['click_id'] = test_df['click_id'].astype('int')
 
     gc.collect()
 
-    print("Training...")
+    logger.info("Training...")
     start_time = time.time()
 
     params = {
@@ -315,29 +321,29 @@ def DO(frm,to,fileno):
                             num_boost_round=1000, 
                             categorical_features=categorical)
 
-    print('[{}]: model training time'.format(time.time() - start_time))
+    logger.info('[{}]: model training time'.format(time.time() - start_time))
     del train_df
     del val_df
     gc.collect()
 
 
-    ax = lgb.plot_importance(bst, max_num_features=100)
-    plt.show()
-    plt.savefig('foo.png')
+#    ax = lgb.plot_importance(bst, max_num_features=100)
+#    plt.show()
+#    plt.savefig('foo.png')
 
-    print("Predicting...")
+    logger.info("Predicting...")
     sub['is_attributed'] = bst.predict(test_df[predictors],num_iteration=best_iteration)
 #     if not debug:
-#         print("writing...")
-    sub.to_csv('sub_it%d.csv'%(fileno),index=False,float_format='%.9f')
-    print("done...")
+#         logger.info("writing...")
+    sub.to_csv('../output/sub_it%d.csv'%(fileno),index=False,float_format='%.9f')
+    logger.info("done...")
     return sub
     
     
 ####### Chunk size defining and final run  ############
 
 nrows=184903891-1
-nchunk=25000000
+nchunk=40000000
 val_size=2500000
 
 frm=nrows-65000000
