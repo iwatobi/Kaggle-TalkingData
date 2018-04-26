@@ -41,6 +41,8 @@ def do_next_prev_Click( df,agg_suffix, agg_type='float32'):
     predictors.append('minute')
     df['second'] = pd.to_datetime(df.click_time).dt.second.astype('int8')
     predictors.append('second')
+    df['dayofweek'] = pd.to_datetime(df.click_time).dt.dayofweek.astype('int8')
+    predictors.append('dayofweek')
     logger.info(f">> Extracting {agg_suffix} time calculation features...")
     
     GROUP_BY_NEXT_CLICKS = [
@@ -84,7 +86,7 @@ def do_next_prev_Click( df,agg_suffix, agg_type='float32'):
 
 ## Below a function is written to extract count feature by aggregating different cols
 def do_count( df, group_cols, agg_type='uint32', show_max=False, show_agg=True ):
-    agg_name='{}count'.format('_'.join(group_cols))  
+    agg_name='{}_count'.format('_'.join(group_cols))  
     if show_agg:
         logger.info( "Aggregating by {} ... and saved in {}".format(group_cols, agg_name))
     gp = df[group_cols][group_cols].groupby(group_cols).size().rename(agg_name).to_frame().reset_index()
@@ -262,10 +264,16 @@ def DO(frm,to,fileno):
     train_df = do_count( train_df, ['ip', 'day', 'hour'] ); gc.collect()
     train_df = do_count( train_df, ['ip', 'app']); gc.collect()
     train_df = do_count( train_df, ['ip', 'app', 'os']); gc.collect()
+    train_df = do_count( train_df, ['ip', 'channel'] ); gc.collect()
+    train_df = do_count( train_df, ['ip', 'device', 'os', 'app']); gc.collect()
+    train_df = do_count( train_df, ['ip', 'device']); gc.collect()
+    train_df = do_count( train_df, ['app', 'channel']); gc.collect()
     train_df = do_var( train_df, ['ip', 'day', 'channel'], 'hour'); gc.collect()
     train_df = do_var( train_df, ['ip', 'app', 'os'], 'hour'); gc.collect()
     train_df = do_var( train_df, ['ip', 'app', 'channel'], 'day'); gc.collect()
     train_df = do_mean( train_df, ['ip', 'app', 'channel'], 'hour' ); gc.collect()
+    train_df = do_mean( train_df, ['ip', 'app', 'os'], 'hour'); gc.collect()
+    train_df = do_mean( train_df, ['ip', 'app', 'channel'], 'day'); gc.collect()
     
     logger.debug(train_df.head(5))
     gc.collect()
@@ -277,7 +285,7 @@ def DO(frm,to,fileno):
     for feature in word:
         if feature not in predictors:
             predictors.append(feature)
-    categorical = ['app', 'device', 'os', 'channel', 'hour', 'day','minute', 'second']
+    categorical = ['app', 'device', 'os', 'channel', 'hour', 'day','minute', 'second', 'dayofweek']
     logger.info('After appending predictors... {}'.format(sorted(predictors)))
 
     test_df = train_df[len_train:]
@@ -297,15 +305,15 @@ def DO(frm,to,fileno):
     start_time = time.time()
 
     params = {
-        'learning_rate': 0.20,
+        'learning_rate': 0.10,
         #'is_unbalance': 'true', # replaced with scale_pos_weight argument
         'num_leaves': 7,  # 2^max_depth - 1
         'max_depth': 3,  # -1 means no limit
         'min_child_samples': 100,  # Minimum number of data need in a child(min_data_in_leaf)
         'max_bin': 100,  # Number of bucketed bin for feature values
-        'subsample': 0.7,  # Subsample ratio of the training instance.
+        'subsample': 0.6,  # Subsample ratio of the training instance.
         'subsample_freq': 1,  # frequence of subsample, <=0 means no enable
-        'colsample_bytree': 0.9,  # Subsample ratio of columns when constructing each tree.
+        'colsample_bytree': 0.3,  # Subsample ratio of columns when constructing each tree.
         'min_child_weight': 0,  # Minimum sum of instance weight(hessian) needed in a child(leaf)
         'scale_pos_weight':200 # because training data is extremely unbalanced 
     }
@@ -335,7 +343,7 @@ def DO(frm,to,fileno):
     sub['is_attributed'] = bst.predict(test_df[predictors],num_iteration=best_iteration)
 #     if not debug:
 #         logger.info("writing...")
-    sub.to_csv('../output/sub_it%d.csv'%(fileno),index=False,float_format='%.9f')
+    sub.to_csv('../output/sub_it%d.csv.gz'%(fileno),index=False,float_format='%.9f',compression='gzip')
     logger.info("done...")
     return sub
     
@@ -343,10 +351,10 @@ def DO(frm,to,fileno):
 ####### Chunk size defining and final run  ############
 
 nrows=184903891-1
-nchunk=40000000
-val_size=2500000
+nchunk=80000000
+val_size=5000000
 
-frm=nrows-65000000
+frm=nrows-75000000
 if debug:
     frm=0
     nchunk=100000
