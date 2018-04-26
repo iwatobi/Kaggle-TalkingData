@@ -185,7 +185,7 @@ def lgb_modelfit_nocv(params, dtrain, dvalid, predictors, target='target', objec
         'min_split_gain': 0,  # lambda_l1, lambda_l2 and min_gain_to_split to regularization
         'reg_alpha': 0,  # L1 regularization term on weights
         'reg_lambda': 0,  # L2 regularization term on weights
-        'nthread': 8,
+        'nthread': 18,
         'verbose': 0,
     }
 
@@ -315,7 +315,8 @@ def DO(frm,to,fileno):
         'subsample_freq': 1,  # frequence of subsample, <=0 means no enable
         'colsample_bytree': 0.3,  # Subsample ratio of columns when constructing each tree.
         'min_child_weight': 0,  # Minimum sum of instance weight(hessian) needed in a child(leaf)
-        'scale_pos_weight':200 # because training data is extremely unbalanced 
+        'scale_pos_weight':200, # because training data is extremely unbalanced 
+        'reg_alpha': 0.1
     }
     (bst,best_iteration) = lgb_modelfit_nocv(params, 
                             train_df, 
@@ -351,10 +352,10 @@ def DO(frm,to,fileno):
 ####### Chunk size defining and final run  ############
 
 nrows=184903891-1
-nchunk=80000000
-val_size=5000000
+nchunk=100000000
+val_size=10000000
 
-frm=nrows-75000000
+frm=nrows-110000000
 if debug:
     frm=0
     nchunk=100000
