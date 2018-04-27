@@ -101,7 +101,7 @@ def do_count( df, group_cols, agg_type='uint32', show_max=False, show_agg=True )
     return( df )
     
 ##  Below a function is written to extract unique count feature from different cols
-def do_countuniq( df, group_cols, counted, agg_type='uint32', show_max=False, show_agg=True ):
+def do_countuniq( df, group_cols, counted, agg_type='uint16', show_max=False, show_agg=True ):
     agg_name= '{}_by_{}_countuniq'.format(('_'.join(group_cols)),(counted))  
     if show_agg:
         logger.info( "Counting unqiue {} by {} ... and saved in {}".format(counted, group_cols, agg_name))
@@ -116,7 +116,7 @@ def do_countuniq( df, group_cols, counted, agg_type='uint32', show_max=False, sh
     gc.collect()
     return( df )
 ### Below a function is written to extract cumulative count feature  from different cols    
-def do_cumcount( df, group_cols, counted,agg_type='uint32', show_max=False, show_agg=True ):
+def do_cumcount( df, group_cols, counted,agg_type='uint16', show_max=False, show_agg=True ):
     agg_name= '{}_by_{}_cumcount'.format(('_'.join(group_cols)),(counted)) 
     if show_agg:
         logger.info( "Cumulative count by {} ... and saved in {}".format(group_cols, agg_name))
@@ -352,10 +352,14 @@ def DO(frm,to,fileno):
 ####### Chunk size defining and final run  ############
 
 nrows=184903891-1
+frm=nrows-110000000
 nchunk=100000000
 val_size=10000000
 
-frm=nrows-110000000
+# use all train data
+frm=0
+nchunk=nrows
+
 if debug:
     frm=0
     nchunk=100000
