@@ -18,6 +18,7 @@ import lightgbm as lgb
 import gc
 #import matplotlib.pyplot as plt
 import os
+import pickle
 
 from logging import getLogger
 from logging.config import fileConfig
@@ -31,7 +32,7 @@ logger = getLogger(__name__)
     ### Taken help from https://www.kaggle.com/nanomathias/feature-engineering-importance-testing
     ###Did some Cosmetic changes 
 predictors=[]
-def do_next_prev_Click( df,agg_suffix, agg_type='float32'):
+def do_next_prev_Click( df, agg_suffix, frm, to, agg_type='float32'):
     logger.info('Extracting new features...')
     df['hour'] = pd.to_datetime(df.click_time).dt.hour.astype('int8')
     df['day'] = pd.to_datetime(df.click_time).dt.day.astype('int8')
@@ -64,18 +65,25 @@ def do_next_prev_Click( df,agg_suffix, agg_type='float32'):
     
        # Name of new feature
         new_feature = '{}_{}'.format('_'.join(spec['groupby']),agg_suffix)    
+        agg_path = '../features/{}_{}_{}.pkl'.format(new_feature, frm, to)
     
         # Unique list of features to select
         all_features = spec['groupby'] + ['click_time']
 
         # Run calculation
         logger.info(f">> Grouping by {spec['groupby']}, and saving time to {agg_suffix} in: {new_feature}")
-        if agg_suffix=="nextClick":
-            df[new_feature] = (df[all_features].groupby(spec[
-            'groupby']).click_time.shift(-1) - df.click_time).dt.seconds.astype(agg_type)
-        elif agg_suffix== "prevClick":
-            df[new_feature] = (df.click_time - df[all_features].groupby(spec[
-                'groupby']).click_time.shift(+1) ).dt.seconds.astype(agg_type)
+        if os.path.exists(agg_path):
+            with open(agg_path, 'rb') as f:
+                df[new_feature] = pickle.load(f)
+        else:
+            if agg_suffix=="nextClick":
+                df[new_feature] = (df[all_features].groupby(spec[
+                    'groupby']).click_time.shift(-1) - df.click_time).dt.seconds.astype(agg_type)
+            elif agg_suffix== "prevClick":
+                df[new_feature] = (df.click_time - df[all_features].groupby(spec[
+                    'groupby']).click_time.shift(+1) ).dt.seconds.astype(agg_type)
+            with open(agg_path, 'wb') as f:
+                pickle.dump(df[new_feature], f)
         predictors.append(new_feature)
         gc.collect()
 #         logger.info('predictors',predictors)
@@ -85,11 +93,18 @@ def do_next_prev_Click( df,agg_suffix, agg_type='float32'):
 
 
 ## Below a function is written to extract count feature by aggregating different cols
-def do_count( df, group_cols, agg_type='uint32', show_max=False, show_agg=True ):
-    agg_name='{}_count'.format('_'.join(group_cols))  
+def do_count( df, group_cols, frm, to, agg_type='uint32', show_max=False, show_agg=True ):
+    agg_name='{}_count'.format('_'.join(group_cols))
+    agg_path='../features/{}_{}_{}.pkl'.format(agg_name, frm, to)
     if show_agg:
         logger.info( "Aggregating by {} ... and saved in {}".format(group_cols, agg_name))
-    gp = df[group_cols][group_cols].groupby(group_cols).size().rename(agg_name).to_frame().reset_index()
+    if os.path.exists(agg_path):
+        with open(agg_path, 'rb') as f:
+            gp = pickle.load(f)
+    else:
+        gp = df[group_cols][group_cols].groupby(group_cols).size().rename(agg_name).to_frame().reset_index()
+        with open(agg_path, 'wb') as f:
+            pickle.dump(gp, f)
     df = df.merge(gp, on=group_cols, how='left')
     del gp
     if show_max:
@@ -101,11 +116,18 @@ def do_count( df, group_cols, agg_type='uint32', show_max=False, show_agg=True )
     return( df )
     
 ##  Below a function is written to extract unique count feature from different cols
-def do_countuniq( df, group_cols, counted, agg_type='uint16', show_max=False, show_agg=True ):
+def do_countuniq( df, group_cols, counted, frm, to, agg_type='uint16', show_max=False, show_agg=True ):
     agg_name= '{}_by_{}_countuniq'.format(('_'.join(group_cols)),(counted))  
+    agg_path='../features/{}_{}_{}.pkl'.format(agg_name, frm, to)
     if show_agg:
         logger.info( "Counting unqiue {} by {} ... and saved in {}".format(counted, group_cols, agg_name))
-    gp = df[group_cols+[counted]].groupby(group_cols)[counted].nunique().reset_index().rename(columns={counted:agg_name})
+    if os.path.exists(agg_path):
+        with open(agg_path, 'rb') as f:
+            gp = pickle.load(f)
+    else:
+        gp = df[group_cols+[counted]].groupby(group_cols)[counted].nunique().reset_index().rename(columns={counted:agg_name})
+        with open(agg_path, 'wb') as f:
+            pickle.dump(gp, f)
     df = df.merge(gp, on=group_cols, how='left')
     del gp
     if show_max:
@@ -116,11 +138,18 @@ def do_countuniq( df, group_cols, counted, agg_type='uint16', show_max=False, sh
     gc.collect()
     return( df )
 ### Below a function is written to extract cumulative count feature  from different cols    
-def do_cumcount( df, group_cols, counted,agg_type='uint16', show_max=False, show_agg=True ):
+def do_cumcount( df, group_cols, counted, frm, to, agg_type='uint16', show_max=False, show_agg=True ):
     agg_name= '{}_by_{}_cumcount'.format(('_'.join(group_cols)),(counted)) 
+    agg_path='../features/{}_{}_{}.pkl'.format(agg_name, frm, to)
     if show_agg:
         logger.info( "Cumulative count by {} ... and saved in {}".format(group_cols, agg_name))
-    gp = df[group_cols+[counted]].groupby(group_cols)[counted].cumcount()
+    if os.path.exists(agg_path):
+        with open(agg_path, 'rb') as f:
+            gp = pickle.load(f)
+    else:
+        gp = df[group_cols+[counted]].groupby(group_cols)[counted].cumcount()
+        with open(agg_path, 'wb') as f:
+            pickle.dump(gp, f)
     df[agg_name]=gp.values
     del gp
     if show_max:
@@ -131,11 +160,18 @@ def do_cumcount( df, group_cols, counted,agg_type='uint16', show_max=False, show
     gc.collect()
     return( df )
 ### Below a function is written to extract mean feature  from different cols
-def do_mean( df, group_cols, counted, agg_type='float32', show_max=False, show_agg=True ):
+def do_mean( df, group_cols, counted, frm, to, agg_type='float32', show_max=False, show_agg=True ):
     agg_name= '{}_by_{}_mean'.format(('_'.join(group_cols)),(counted))  
+    agg_path='../features/{}_{}_{}.pkl'.format(agg_name, frm, to)
     if show_agg:
         logger.info("Calculating mean of {} by {} ... and saved in {}".format(counted, group_cols, agg_name))
-    gp = df[group_cols+[counted]].groupby(group_cols)[counted].mean().reset_index().rename(columns={counted:agg_name})
+    if os.path.exists(agg_path):
+        with open(agg_path, 'rb') as f:
+            gp = pickle.load(f)
+    else:
+        gp = df[group_cols+[counted]].groupby(group_cols)[counted].mean().reset_index().rename(columns={counted:agg_name})
+        with open(agg_path, 'wb') as f:
+            pickle.dump(gp, f)
     df = df.merge(gp, on=group_cols, how='left')
     del gp
     if show_max:
@@ -146,11 +182,18 @@ def do_mean( df, group_cols, counted, agg_type='float32', show_max=False, show_a
     gc.collect()
     return( df )
 
-def do_var( df, group_cols, counted, agg_type='float32', show_max=False, show_agg=True ):
+def do_var( df, group_cols, counted, frm, to, agg_type='float32', show_max=False, show_agg=True ):
     agg_name= '{}_by_{}_var'.format(('_'.join(group_cols)),(counted)) 
+    agg_path='../features/{}_{}_{}.pkl'.format(agg_name, frm, to)
     if show_agg:
         logger.info("Calculating variance of {} by {} ... and saved in {}".format(counted, group_cols, agg_name))
-    gp = df[group_cols+[counted]].groupby(group_cols)[counted].var().reset_index().rename(columns={counted:agg_name})
+    if os.path.exists(agg_path):
+        with open(agg_path, 'rb') as f:
+            gp = pickle.load(f)
+    else:
+        gp = df[group_cols+[counted]].groupby(group_cols)[counted].var().reset_index().rename(columns={counted:agg_name})
+        with open(agg_path, 'wb') as f:
+            pickle.dump(gp, f)
     df = df.merge(gp, on=group_cols, how='left')
     del gp
     if show_max:
@@ -250,30 +293,30 @@ def DO(frm,to,fileno):
     del test_df
         
     gc.collect()
-    train_df = do_next_prev_Click( train_df,agg_suffix='nextClick', agg_type='float32'  ); gc.collect()
-    # train_df = do_next_prev_Click( train_df,agg_suffix='prevClick', agg_type='float32'  ); gc.collect()  ## Removed temporarily due RAM sortage. 
-    train_df = do_countuniq( train_df, ['ip'], 'channel' ); gc.collect()
-    train_df = do_countuniq( train_df, ['ip', 'device', 'os'], 'app'); gc.collect()
-    train_df = do_countuniq( train_df, ['ip', 'day'], 'hour' ); gc.collect()
-    train_df = do_countuniq( train_df, ['ip'], 'app'); gc.collect()
-    train_df = do_countuniq( train_df, ['ip', 'app'], 'os'); gc.collect()
-    train_df = do_countuniq( train_df, ['ip'], 'device'); gc.collect()
-    train_df = do_countuniq( train_df, ['app'], 'channel'); gc.collect()
-    train_df = do_cumcount( train_df, ['ip'], 'os'); gc.collect()
-    train_df = do_cumcount( train_df, ['ip', 'device', 'os'], 'app'); gc.collect()
-    train_df = do_count( train_df, ['ip', 'day', 'hour'] ); gc.collect()
-    train_df = do_count( train_df, ['ip', 'app']); gc.collect()
-    train_df = do_count( train_df, ['ip', 'app', 'os']); gc.collect()
-    train_df = do_count( train_df, ['ip', 'channel'] ); gc.collect()
-    train_df = do_count( train_df, ['ip', 'device', 'os', 'app']); gc.collect()
-    train_df = do_count( train_df, ['ip', 'device']); gc.collect()
-    train_df = do_count( train_df, ['app', 'channel']); gc.collect()
-    train_df = do_var( train_df, ['ip', 'day', 'channel'], 'hour'); gc.collect()
-    train_df = do_var( train_df, ['ip', 'app', 'os'], 'hour'); gc.collect()
-    train_df = do_var( train_df, ['ip', 'app', 'channel'], 'day'); gc.collect()
-    train_df = do_mean( train_df, ['ip', 'app', 'channel'], 'hour' ); gc.collect()
-    train_df = do_mean( train_df, ['ip', 'app', 'os'], 'hour'); gc.collect()
-    train_df = do_mean( train_df, ['ip', 'app', 'channel'], 'day'); gc.collect()
+    train_df = do_next_prev_Click( train_df, 'nextClick', frm, to, agg_type='float32'  ); gc.collect()
+    # train_df = do_next_prev_Click( train_df, 'prevClick', frm, to, agg_type='float32'  ); gc.collect()  ## Removed temporarily due RAM sortage. 
+    train_df = do_countuniq( train_df, ['ip'], 'channel', frm, to); gc.collect()
+    train_df = do_countuniq( train_df, ['ip', 'device', 'os'], 'app', frm, to); gc.collect()
+    train_df = do_countuniq( train_df, ['ip', 'day'], 'hour', frm, to); gc.collect()
+    train_df = do_countuniq( train_df, ['ip'], 'app', frm, to); gc.collect()
+    train_df = do_countuniq( train_df, ['ip', 'app'], 'os', frm, to); gc.collect()
+    train_df = do_countuniq( train_df, ['ip'], 'device', frm, to); gc.collect()
+    train_df = do_countuniq( train_df, ['app'], 'channel', frm, to); gc.collect()
+    train_df = do_cumcount( train_df, ['ip'], 'os', frm, to); gc.collect()
+    train_df = do_cumcount( train_df, ['ip', 'device', 'os'], 'app', frm, to); gc.collect()
+    train_df = do_count( train_df, ['ip', 'day', 'hour'], frm, to); gc.collect()
+    train_df = do_count( train_df, ['ip', 'app'], frm, to); gc.collect()
+    train_df = do_count( train_df, ['ip', 'app', 'os'], frm, to); gc.collect()
+    train_df = do_count( train_df, ['ip', 'channel'], frm, to); gc.collect()
+    train_df = do_count( train_df, ['ip', 'device', 'os', 'app'], frm, to); gc.collect()
+    train_df = do_count( train_df, ['ip', 'device'], frm, to); gc.collect()
+    train_df = do_count( train_df, ['app', 'channel'], frm, to); gc.collect()
+    train_df = do_var( train_df, ['ip', 'day', 'channel'], 'hour', frm, to); gc.collect()
+    train_df = do_var( train_df, ['ip', 'app', 'os'], 'hour', frm, to); gc.collect()
+    train_df = do_var( train_df, ['ip', 'app', 'channel'], 'day', frm, to); gc.collect()
+    train_df = do_mean( train_df, ['ip', 'app', 'channel'], 'hour', frm, to); gc.collect()
+    train_df = do_mean( train_df, ['ip', 'app', 'os'], 'hour', frm, to); gc.collect()
+    train_df = do_mean( train_df, ['ip', 'app', 'channel'], 'day', frm, to); gc.collect()
     
     logger.debug(train_df.head(5))
     gc.collect()

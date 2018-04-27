@@ -102,5 +102,6 @@ ENV/
 
 input/*
 output/*
+features/*
 logs/*
 !.gitkeep
