@@ -17,6 +17,7 @@ from sklearn.model_selection import train_test_split
 import lightgbm as lgb
 import gc
 #import matplotlib.pyplot as plt
+from multiprocessing import cpu_count
 import os
 import pickle
 
@@ -210,6 +211,7 @@ if debug:
 
 def lgb_modelfit_nocv(params, dtrain, dvalid, predictors, target='target', objective='binary', metrics='auc',
                  feval=None, early_stopping_rounds=50, num_boost_round=3000, verbose_eval=10, categorical_features=None):
+    nthread = int(cpu_count() * 0.75)
     lgb_params = {
         'boosting_type': 'gbdt',
         'objective': objective,
@@ -228,7 +230,7 @@ def lgb_modelfit_nocv(params, dtrain, dvalid, predictors, target='target', objec
         'min_split_gain': 0,  # lambda_l1, lambda_l2 and min_gain_to_split to regularization
         'reg_alpha': 0,  # L1 regularization term on weights
         'reg_lambda': 0,  # L2 regularization term on weights
-        'nthread': 18,
+        'nthread': nthread,
         'verbose': 0,
     }
 
@@ -294,7 +296,7 @@ def DO(frm,to,fileno):
         
     gc.collect()
     train_df = do_next_prev_Click( train_df, 'nextClick', frm, to, agg_type='float32'  ); gc.collect()
-    # train_df = do_next_prev_Click( train_df, 'prevClick', frm, to, agg_type='float32'  ); gc.collect()  ## Removed temporarily due RAM sortage. 
+    train_df = do_next_prev_Click( train_df, 'prevClick', frm, to, agg_type='float32'  ); gc.collect()
     train_df = do_countuniq( train_df, ['ip'], 'channel', frm, to); gc.collect()
     train_df = do_countuniq( train_df, ['ip', 'device', 'os'], 'app', frm, to); gc.collect()
     train_df = do_countuniq( train_df, ['ip', 'day'], 'hour', frm, to); gc.collect()
