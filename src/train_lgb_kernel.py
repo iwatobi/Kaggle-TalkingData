@@ -247,6 +247,10 @@ def lgb_modelfit_nocv(params, dtrain, dvalid, predictors, target='target', objec
                           categorical_feature=categorical_features
                           )
 
+    del dtrain
+    del dvalid
+    gc.collect()
+
     evals_results = {}
 
     bst1 = lgb.train(lgb_params, 
@@ -334,15 +338,12 @@ def DO(frm,to,fileno):
     logger.info('After appending predictors... {}'.format(sorted(predictors)))
 
     test_df = train_df[len_train:]
-    val_df = train_df[(len_train-val_size):len_train]
-    train_df = train_df[:(len_train-val_size)]
+    X = train_df[:len_train]
+    train_df, val_df = train_test_split(X, test_size=val_size, random_state=0, stratify=X['is_attributed'])
 
     logger.info("train size: {}".format(len(train_df)))
     logger.info("valid size: {}".format(len(val_df)))
     logger.info("test size : {}".format(len(test_df)))
-
-    sub = pd.DataFrame()
-    sub['click_id'] = test_df['click_id'].astype('int')
 
     gc.collect()
 
@@ -372,7 +373,7 @@ def DO(frm,to,fileno):
                             metrics='auc',
                             early_stopping_rounds=30, 
                             verbose_eval=True, 
-                            num_boost_round=1000, 
+                            num_boost_round=5000, 
                             categorical_features=categorical)
 
     logger.info('[{}]: model training time'.format(time.time() - start_time))
@@ -386,6 +387,8 @@ def DO(frm,to,fileno):
 #    plt.savefig('foo.png')
 
     logger.info("Predicting...")
+    sub = pd.DataFrame()
+    sub['click_id'] = test_df['click_id'].astype('int')
     sub['is_attributed'] = bst.predict(test_df[predictors],num_iteration=best_iteration)
 #     if not debug:
 #         logger.info("writing...")
@@ -399,11 +402,11 @@ def DO(frm,to,fileno):
 nrows=184903891-1
 frm=nrows-110000000
 nchunk=100000000
-val_size=10000000
+val_size=30000000
 
 # use all train data
-frm=0
-nchunk=nrows
+#frm=0
+#nchunk=nrows
 
 if debug:
     frm=0
