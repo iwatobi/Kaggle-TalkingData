@@ -33,18 +33,20 @@ logger = getLogger(__name__)
     ### Taken help from https://www.kaggle.com/nanomathias/feature-engineering-importance-testing
     ###Did some Cosmetic changes 
 predictors=[]
-def do_next_prev_Click( df, agg_suffix, frm, to, agg_type='float32'):
+def do_next_prev_Click( df, agg_suffix, frm_to, agg_type='float32'):
     logger.info('Extracting new features...')
-    df['hour'] = pd.to_datetime(df.click_time).dt.hour.astype('int8')
-    df['day'] = pd.to_datetime(df.click_time).dt.day.astype('int8')
+    if 'hour' not in df.columns:
+        df['hour'] = pd.to_datetime(df.click_time).dt.hour.astype('int8')
+    if 'day' not in df.columns:
+        df['day'] = pd.to_datetime(df.click_time).dt.day.astype('int8')
     
     #### New added
-    df['minute'] = pd.to_datetime(df.click_time).dt.minute.astype('int8')
-    predictors.append('minute')
-    df['second'] = pd.to_datetime(df.click_time).dt.second.astype('int8')
-    predictors.append('second')
-    df['dayofweek'] = pd.to_datetime(df.click_time).dt.dayofweek.astype('int8')
-    predictors.append('dayofweek')
+    if 'minute' not in df.columns:
+        df['minute'] = pd.to_datetime(df.click_time).dt.minute.astype('int8')
+    if 'second' not in df.columns:
+        df['second'] = pd.to_datetime(df.click_time).dt.second.astype('int8')
+    if 'dayofweek' not in df.columns:
+        df['dayofweek'] = pd.to_datetime(df.click_time).dt.dayofweek.astype('int8')
     logger.info(f">> Extracting {agg_suffix} time calculation features...")
     
     GROUP_BY_NEXT_CLICKS = [
@@ -66,7 +68,7 @@ def do_next_prev_Click( df, agg_suffix, frm, to, agg_type='float32'):
     
        # Name of new feature
         new_feature = '{}_{}'.format('_'.join(spec['groupby']),agg_suffix)    
-        agg_path = '../features/{}_{}_{}.pkl'.format(new_feature, frm, to)
+        agg_path = '../features/{}/{}.pkl'.format(frm_to, new_feature)
     
         # Unique list of features to select
         all_features = spec['groupby'] + ['click_time']
@@ -94,9 +96,9 @@ def do_next_prev_Click( df, agg_suffix, frm, to, agg_type='float32'):
 
 
 ## Below a function is written to extract count feature by aggregating different cols
-def do_count( df, group_cols, frm, to, agg_type='uint32', show_max=False, show_agg=True ):
+def do_count( df, group_cols, frm_to, agg_type='uint32', show_max=False, show_agg=True ):
     agg_name='{}_count'.format('_'.join(group_cols))
-    agg_path='../features/{}_{}_{}.pkl'.format(agg_name, frm, to)
+    agg_path='../features/{}/{}.pkl'.format(frm_to, agg_name)
     if show_agg:
         logger.info( "Aggregating by {} ... and saved in {}".format(group_cols, agg_name))
     if os.path.exists(agg_path):
@@ -117,9 +119,9 @@ def do_count( df, group_cols, frm, to, agg_type='uint32', show_max=False, show_a
     return( df )
     
 ##  Below a function is written to extract unique count feature from different cols
-def do_countuniq( df, group_cols, counted, frm, to, agg_type='uint16', show_max=False, show_agg=True ):
+def do_countuniq( df, group_cols, counted, frm_to, agg_type='uint16', show_max=False, show_agg=True ):
     agg_name= '{}_by_{}_countuniq'.format(('_'.join(group_cols)),(counted))  
-    agg_path='../features/{}_{}_{}.pkl'.format(agg_name, frm, to)
+    agg_path='../features/{}/{}.pkl'.format(frm_to, agg_name)
     if show_agg:
         logger.info( "Counting unqiue {} by {} ... and saved in {}".format(counted, group_cols, agg_name))
     if os.path.exists(agg_path):
@@ -139,9 +141,9 @@ def do_countuniq( df, group_cols, counted, frm, to, agg_type='uint16', show_max=
     gc.collect()
     return( df )
 ### Below a function is written to extract cumulative count feature  from different cols    
-def do_cumcount( df, group_cols, counted, frm, to, agg_type='uint16', show_max=False, show_agg=True ):
+def do_cumcount( df, group_cols, counted, frm_to, agg_type='uint16', show_max=False, show_agg=True ):
     agg_name= '{}_by_{}_cumcount'.format(('_'.join(group_cols)),(counted)) 
-    agg_path='../features/{}_{}_{}.pkl'.format(agg_name, frm, to)
+    agg_path='../features/{}/{}.pkl'.format(frm_to, agg_name)
     if show_agg:
         logger.info( "Cumulative count by {} ... and saved in {}".format(group_cols, agg_name))
     if os.path.exists(agg_path):
@@ -161,9 +163,9 @@ def do_cumcount( df, group_cols, counted, frm, to, agg_type='uint16', show_max=F
     gc.collect()
     return( df )
 ### Below a function is written to extract mean feature  from different cols
-def do_mean( df, group_cols, counted, frm, to, agg_type='float32', show_max=False, show_agg=True ):
+def do_mean( df, group_cols, counted, frm_to, agg_type='float32', show_max=False, show_agg=True ):
     agg_name= '{}_by_{}_mean'.format(('_'.join(group_cols)),(counted))  
-    agg_path='../features/{}_{}_{}.pkl'.format(agg_name, frm, to)
+    agg_path='../features/{}/{}.pkl'.format(frm_to, agg_name)
     if show_agg:
         logger.info("Calculating mean of {} by {} ... and saved in {}".format(counted, group_cols, agg_name))
     if os.path.exists(agg_path):
@@ -183,9 +185,9 @@ def do_mean( df, group_cols, counted, frm, to, agg_type='float32', show_max=Fals
     gc.collect()
     return( df )
 
-def do_var( df, group_cols, counted, frm, to, agg_type='float32', show_max=False, show_agg=True ):
+def do_var( df, group_cols, counted, frm_to, agg_type='float32', show_max=False, show_agg=True ):
     agg_name= '{}_by_{}_var'.format(('_'.join(group_cols)),(counted)) 
-    agg_path='../features/{}_{}_{}.pkl'.format(agg_name, frm, to)
+    agg_path='../features/{}/{}.pkl'.format(frm_to, agg_name)
     if show_agg:
         logger.info("Calculating variance of {} by {} ... and saved in {}".format(counted, group_cols, agg_name))
     if os.path.exists(agg_path):
@@ -273,7 +275,7 @@ def lgb_modelfit_nocv(params, dtrain, dvalid, predictors, target='target', objec
 
 #### A function is written here to run the full calculation with defined parameters.
 
-def DO(frm,to,fileno):
+def DO(frm,to,fileno,use_all_agg=True):
     dtypes = {
             'ip'            : 'uint32',
             'app'           : 'uint16',
@@ -299,30 +301,38 @@ def DO(frm,to,fileno):
     del test_df
         
     gc.collect()
-    train_df = do_next_prev_Click( train_df, 'nextClick', frm, to, agg_type='float32'  ); gc.collect()
-    train_df = do_next_prev_Click( train_df, 'prevClick', frm, to, agg_type='float32'  ); gc.collect()
-    train_df = do_countuniq( train_df, ['ip'], 'channel', frm, to); gc.collect()
-    train_df = do_countuniq( train_df, ['ip', 'device', 'os'], 'app', frm, to); gc.collect()
-    train_df = do_countuniq( train_df, ['ip', 'day'], 'hour', frm, to); gc.collect()
-    train_df = do_countuniq( train_df, ['ip'], 'app', frm, to); gc.collect()
-    train_df = do_countuniq( train_df, ['ip', 'app'], 'os', frm, to); gc.collect()
-    train_df = do_countuniq( train_df, ['ip'], 'device', frm, to); gc.collect()
-    train_df = do_countuniq( train_df, ['app'], 'channel', frm, to); gc.collect()
-    train_df = do_cumcount( train_df, ['ip'], 'os', frm, to); gc.collect()
-    train_df = do_cumcount( train_df, ['ip', 'device', 'os'], 'app', frm, to); gc.collect()
-    train_df = do_count( train_df, ['ip', 'day', 'hour'], frm, to); gc.collect()
-    train_df = do_count( train_df, ['ip', 'app'], frm, to); gc.collect()
-    train_df = do_count( train_df, ['ip', 'app', 'os'], frm, to); gc.collect()
-    train_df = do_count( train_df, ['ip', 'channel'], frm, to); gc.collect()
-    train_df = do_count( train_df, ['ip', 'device', 'os', 'app'], frm, to); gc.collect()
-    train_df = do_count( train_df, ['ip', 'device'], frm, to); gc.collect()
-    train_df = do_count( train_df, ['app', 'channel'], frm, to); gc.collect()
-    train_df = do_var( train_df, ['ip', 'day', 'channel'], 'hour', frm, to); gc.collect()
-    train_df = do_var( train_df, ['ip', 'app', 'os'], 'hour', frm, to); gc.collect()
-    train_df = do_var( train_df, ['ip', 'app', 'channel'], 'day', frm, to); gc.collect()
-    train_df = do_mean( train_df, ['ip', 'app', 'channel'], 'hour', frm, to); gc.collect()
-    train_df = do_mean( train_df, ['ip', 'app', 'os'], 'hour', frm, to); gc.collect()
-    train_df = do_mean( train_df, ['ip', 'app', 'channel'], 'day', frm, to); gc.collect()
+
+    frm_to = '{}_{}'.format(frm, to)
+    os.makedirs('../features/{}'.format(frm_to), exist_ok=True)
+
+    train_df = do_next_prev_Click( train_df, 'nextClick', frm_to, agg_type='float32'  ); gc.collect()
+    train_df = do_next_prev_Click( train_df, 'prevClick', frm_to, agg_type='float32'  ); gc.collect()
+    train_df = do_cumcount( train_df, ['ip'], 'os', frm_to); gc.collect()
+    train_df = do_cumcount( train_df, ['ip', 'device', 'os'], 'app', frm_to); gc.collect()
+
+    if use_all_agg:
+        frm_to = 'all'
+
+    train_df = do_countuniq( train_df, ['ip'], 'channel', frm_to); gc.collect()
+    train_df = do_countuniq( train_df, ['ip', 'device', 'os'], 'app', frm_to); gc.collect()
+    train_df = do_countuniq( train_df, ['ip', 'day'], 'hour', frm_to); gc.collect()
+    train_df = do_countuniq( train_df, ['ip'], 'app', frm_to); gc.collect()
+    train_df = do_countuniq( train_df, ['ip', 'app'], 'os', frm_to); gc.collect()
+    train_df = do_countuniq( train_df, ['ip'], 'device', frm_to); gc.collect()
+    train_df = do_countuniq( train_df, ['app'], 'channel', frm_to); gc.collect()
+    train_df = do_count( train_df, ['ip', 'day', 'hour'], frm_to); gc.collect()
+    train_df = do_count( train_df, ['ip', 'app'], frm_to); gc.collect()
+    train_df = do_count( train_df, ['ip', 'app', 'os'], frm_to); gc.collect()
+    train_df = do_count( train_df, ['ip', 'channel'], frm_to); gc.collect()
+    train_df = do_count( train_df, ['ip', 'device', 'os', 'app'], frm_to); gc.collect()
+    train_df = do_count( train_df, ['ip', 'device'], frm_to); gc.collect()
+    train_df = do_count( train_df, ['app', 'channel'], frm_to); gc.collect()
+    train_df = do_var( train_df, ['ip', 'day', 'channel'], 'hour', frm_to); gc.collect()
+    train_df = do_var( train_df, ['ip', 'app', 'os'], 'hour', frm_to); gc.collect()
+    train_df = do_var( train_df, ['ip', 'app', 'channel'], 'day', frm_to); gc.collect()
+    train_df = do_mean( train_df, ['ip', 'app', 'channel'], 'hour', frm_to); gc.collect()
+    train_df = do_mean( train_df, ['ip', 'app', 'os'], 'hour', frm_to); gc.collect()
+    train_df = do_mean( train_df, ['ip', 'app', 'channel'], 'day', frm_to); gc.collect()
     
     logger.debug(train_df.head(5))
     gc.collect()
@@ -330,7 +340,7 @@ def DO(frm,to,fileno):
     
     logger.info('Before appending predictors... {}'.format(sorted(predictors)))
     target = 'is_attributed'
-    word= ['app','device','os', 'channel', 'hour', 'day','minute', 'second']
+    word= ['app','device','os', 'channel', 'hour', 'day','minute', 'second', 'dayofweek']
     for feature in word:
         if feature not in predictors:
             predictors.append(feature)
@@ -338,13 +348,16 @@ def DO(frm,to,fileno):
     logger.info('After appending predictors... {}'.format(sorted(predictors)))
 
     test_df = train_df[len_train:]
-    X = train_df[:len_train]
-    train_df, val_df = train_test_split(X, test_size=val_size, random_state=0, stratify=X['is_attributed'])
+    val_df = train_df[(len_train-val_size):len_train]
+    train_df = train_df[:(len_train-val_size)]
 
     logger.info("train size: {}".format(len(train_df)))
     logger.info("valid size: {}".format(len(val_df)))
     logger.info("test size : {}".format(len(test_df)))
 
+    with open('../features/test_df.pkl', 'wb') as f:
+        pickle.dump(test_df, f)
+    del test_df
     gc.collect()
 
     logger.info("Training...")
@@ -387,6 +400,9 @@ def DO(frm,to,fileno):
 #    plt.savefig('foo.png')
 
     logger.info("Predicting...")
+    with open('../features/test_df.pkl', 'rb') as f:
+        test_df = pickle.load(f)
+    os.remove('../features/test_df.pkl')
     sub = pd.DataFrame()
     sub['click_id'] = test_df['click_id'].astype('int')
     sub['is_attributed'] = bst.predict(test_df[predictors],num_iteration=best_iteration)
@@ -403,10 +419,11 @@ nrows=184903891-1
 frm=nrows-110000000
 nchunk=100000000
 val_size=30000000
+use_all_agg = True
 
 # use all train data
-#frm=0
-#nchunk=nrows
+frm=0
+nchunk=nrows
 
 if debug:
     frm=0
@@ -415,4 +432,4 @@ if debug:
 
 to=frm+nchunk
 
-sub=DO(frm,to,FILENO)
+sub=DO(frm,to,FILENO,use_all_agg)
