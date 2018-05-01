@@ -46,48 +46,58 @@ def do_datetime(df):
     return df
 
 
-def do_next_prev_Click( df, agg_suffix, frm_to, agg_type='float32'):
+def do_next_Click( df, group_cols, frm_to, agg_type='float32'):
+    agg_suffix = 'nextClick'
     logger.info(f">> Extracting {agg_suffix} time calculation features...")
-    
-    GROUP_BY_NEXT_CLICKS = [
-    
-    {'groupby': ['ip', 'app', 'device', 'os', 'channel']},
-    {'groupby': ['ip', 'os', 'device']},
-    {'groupby': ['ip', 'os', 'device', 'app']},
-    {'groupby': ['device', 'channel']},     
-    {'groupby': ['app', 'device', 'channel']}
-    ]
 
-    # Calculate the time to next click for each group
-    for spec in GROUP_BY_NEXT_CLICKS:
-    
-       # Name of new feature
-        new_feature = '{}_{}'.format('_'.join(spec['groupby']),agg_suffix)    
-        agg_path = '../features/{}/{}.pkl'.format(frm_to, new_feature)
-    
-        # Unique list of features to select
-        all_features = spec['groupby'] + ['click_time']
+    # Name of new feature
+    new_feature = '{}_{}'.format('_'.join(group_cols),agg_suffix)    
+    agg_path = '../features/{}/{}.pkl'.format(frm_to, new_feature)
 
-        # Run calculation
-        logger.info(f">> Grouping by {spec['groupby']}, and saving time to {agg_suffix} in: {new_feature}")
-        if os.path.exists(agg_path):
-            with open(agg_path, 'rb') as f:
-                df[new_feature] = pickle.load(f)
-        else:
-            if agg_suffix=="nextClick":
-                df[new_feature] = (df[all_features].groupby(spec[
-                    'groupby']).click_time.shift(-1) - df.click_time).dt.seconds.astype(agg_type)
-            elif agg_suffix== "prevClick":
-                df[new_feature] = (df.click_time - df[all_features].groupby(spec[
-                    'groupby']).click_time.shift(+1) ).dt.seconds.astype(agg_type)
-            with open(agg_path, 'wb') as f:
-                pickle.dump(df[new_feature], f)
-        predictors.append(new_feature)
-        gc.collect()
-#         logger.info('predictors',predictors)
+    # Unique list of features to select
+    all_features = group_cols + ['click_time']
+
+    # Run calculation
+    logger.info(f">> Grouping by {group_cols}, and saving time to {agg_suffix} in: {new_feature}")
+    if os.path.exists(agg_path):
+        with open(agg_path, 'rb') as f:
+            df[new_feature] = pickle.load(f)
+    else:
+        df[new_feature] = (df[all_features].groupby(group_cols)\
+            .click_time.shift(-1) - df.click_time).dt.seconds.astype(agg_type)
+        with open(agg_path, 'wb') as f:
+            pickle.dump(df[new_feature], f)
+    predictors.append(new_feature)
+    gc.collect()
+
     return (df)
 
 
+def do_prev_Click( df, group_cols, frm_to, agg_type='float32'):
+    agg_suffix = 'prevClick'
+    logger.info(f">> Extracting {agg_suffix} time calculation features...")
+
+    # Name of new feature
+    new_feature = '{}_{}'.format('_'.join(group_cols),agg_suffix)    
+    agg_path = '../features/{}/{}.pkl'.format(frm_to, new_feature)
+
+    # Unique list of features to select
+    all_features = group_cols + ['click_time']
+
+    # Run calculation
+    logger.info(f">> Grouping by {group_cols}, and saving time to {agg_suffix} in: {new_feature}")
+    if os.path.exists(agg_path):
+        with open(agg_path, 'rb') as f:
+            df[new_feature] = pickle.load(f)
+    else:
+        df[new_feature] = (df.click_time - df[all_features].groupby(group_cols)\
+                .click_time.shift(+1) ).dt.seconds.astype(agg_type)
+        with open(agg_path, 'wb') as f:
+            pickle.dump(df[new_feature], f)
+    predictors.append(new_feature)
+    gc.collect()
+
+    return (df)
 
 
 ## Below a function is written to extract count feature by aggregating different cols
@@ -304,8 +314,18 @@ def DO(frm,to,fileno,use_all_agg=True):
     frm_to = '{}_{}'.format(frm, to)
     os.makedirs('../features/{}'.format(frm_to), exist_ok=True)
 
-    train_df = do_next_prev_Click( train_df, 'nextClick', frm_to, agg_type='float32'  ); gc.collect()
-    train_df = do_next_prev_Click( train_df, 'prevClick', frm_to, agg_type='float32'  ); gc.collect()
+    train_df = do_next_Click(train_df, ['ip', 'app', 'device', 'os', 'channel'], frm_to); gc.collect()
+    train_df = do_next_Click(train_df, ['ip', 'os', 'device'], frm_to); gc.collect()
+    train_df = do_next_Click(train_df, ['ip', 'os', 'app', 'device'], frm_to); gc.collect()
+    train_df = do_next_Click(train_df, ['device','channel'], frm_to); gc.collect()
+    train_df = do_next_Click(train_df, ['app', 'device', 'channel'], frm_to); gc.collect()
+
+    #train_df = do_prev_Click(train_df, ['ip', 'app', 'device', 'os', 'channel'], frm_to); gc.collect()
+    #train_df = do_prev_Click(train_df, ['ip', 'os', 'device'], frm_to); gc.collect()
+    #train_df = do_prev_Click(train_df, ['ip', 'os', 'app', 'device'], frm_to); gc.collect()
+    #train_df = do_prev_Click(train_df, ['device','channel'], frm_to); gc.collect()
+    #train_df = do_prev_Click(train_df, ['app', 'device', 'channel'], frm_to); gc.collect()
+
     train_df = do_cumcount( train_df, ['ip'], 'os', frm_to); gc.collect()
     train_df = do_cumcount( train_df, ['ip', 'device', 'os'], 'app', frm_to); gc.collect()
 
@@ -369,9 +389,9 @@ def DO(frm,to,fileno,use_all_agg=True):
         'max_depth': 3,  # -1 means no limit
         'min_child_samples': 100,  # Minimum number of data need in a child(min_data_in_leaf)
         'max_bin': 100,  # Number of bucketed bin for feature values
-        'subsample': 0.7,  # Subsample ratio of the training instance.
+        'subsample': 0.6,  # Subsample ratio of the training instance.
         'subsample_freq': 1,  # frequence of subsample, <=0 means no enable
-        'colsample_bytree': 0.5,  # Subsample ratio of columns when constructing each tree.
+        'colsample_bytree': 0.3,  # Subsample ratio of columns when constructing each tree.
         'min_child_weight': 0,  # Minimum sum of instance weight(hessian) needed in a child(leaf)
         'scale_pos_weight':200, # because training data is extremely unbalanced 
         'reg_alpha': 0.1
@@ -421,8 +441,8 @@ val_size=20000000
 use_all_agg = True
 
 # use all train data
-#frm=0
-#nchunk=nrows
+frm=0
+nchunk=nrows
 
 if debug:
     frm=0
