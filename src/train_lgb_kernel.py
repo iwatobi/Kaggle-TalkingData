@@ -33,34 +33,29 @@ logger = getLogger(__name__)
     ### Taken help from https://www.kaggle.com/nanomathias/feature-engineering-importance-testing
     ###Did some Cosmetic changes 
 predictors=[]
+
+def do_datetime(df):
+    logger.info('Extracting new datetime features...')
+
+    df['hour'] = pd.to_datetime(df.click_time).dt.hour.astype('int8')
+    df['day'] = pd.to_datetime(df.click_time).dt.day.astype('int8')
+    df['minute'] = pd.to_datetime(df.click_time).dt.minute.astype('int8')
+    df['second'] = pd.to_datetime(df.click_time).dt.second.astype('int8')
+    df['dayofweek'] = pd.to_datetime(df.click_time).dt.dayofweek.astype('int8')
+
+    return df
+
+
 def do_next_prev_Click( df, agg_suffix, frm_to, agg_type='float32'):
-    logger.info('Extracting new features...')
-    if 'hour' not in df.columns:
-        df['hour'] = pd.to_datetime(df.click_time).dt.hour.astype('int8')
-    if 'day' not in df.columns:
-        df['day'] = pd.to_datetime(df.click_time).dt.day.astype('int8')
-    
-    #### New added
-    if 'minute' not in df.columns:
-        df['minute'] = pd.to_datetime(df.click_time).dt.minute.astype('int8')
-    if 'second' not in df.columns:
-        df['second'] = pd.to_datetime(df.click_time).dt.second.astype('int8')
-    if 'dayofweek' not in df.columns:
-        df['dayofweek'] = pd.to_datetime(df.click_time).dt.dayofweek.astype('int8')
     logger.info(f">> Extracting {agg_suffix} time calculation features...")
     
     GROUP_BY_NEXT_CLICKS = [
     
-    # V1
-    # {'groupby': ['ip']},
-    # {'groupby': ['ip', 'app']},
-    # {'groupby': ['ip', 'channel']},
-    # {'groupby': ['ip', 'os']},
-    
-    # V3
     {'groupby': ['ip', 'app', 'device', 'os', 'channel']},
     {'groupby': ['ip', 'os', 'device']},
-    {'groupby': ['ip', 'os', 'device', 'app']}
+    {'groupby': ['ip', 'os', 'device', 'app']},
+    {'groupby': ['device', 'channel']},     
+    {'groupby': ['app', 'device', 'channel']}
     ]
 
     # Calculate the time to next click for each group
@@ -244,12 +239,14 @@ def lgb_modelfit_nocv(params, dtrain, dvalid, predictors, target='target', objec
                           feature_name=predictors,
                           categorical_feature=categorical_features
                           )
+    del dtrain
+    gc.collect()
+
     xgvalid = lgb.Dataset(dvalid[predictors].values, label=dvalid[target].values,
                           feature_name=predictors,
                           categorical_feature=categorical_features
                           )
 
-    del dtrain
     del dvalid
     gc.collect()
 
@@ -301,6 +298,8 @@ def DO(frm,to,fileno,use_all_agg=True):
     del test_df
         
     gc.collect()
+
+    train_df = do_datetime(train_df)
 
     frm_to = '{}_{}'.format(frm, to)
     os.makedirs('../features/{}'.format(frm_to), exist_ok=True)
@@ -364,15 +363,15 @@ def DO(frm,to,fileno,use_all_agg=True):
     start_time = time.time()
 
     params = {
-        'learning_rate': 0.10,
+        'learning_rate': 0.15,
         #'is_unbalance': 'true', # replaced with scale_pos_weight argument
         'num_leaves': 7,  # 2^max_depth - 1
         'max_depth': 3,  # -1 means no limit
         'min_child_samples': 100,  # Minimum number of data need in a child(min_data_in_leaf)
         'max_bin': 100,  # Number of bucketed bin for feature values
-        'subsample': 0.6,  # Subsample ratio of the training instance.
+        'subsample': 0.7,  # Subsample ratio of the training instance.
         'subsample_freq': 1,  # frequence of subsample, <=0 means no enable
-        'colsample_bytree': 0.3,  # Subsample ratio of columns when constructing each tree.
+        'colsample_bytree': 0.5,  # Subsample ratio of columns when constructing each tree.
         'min_child_weight': 0,  # Minimum sum of instance weight(hessian) needed in a child(leaf)
         'scale_pos_weight':200, # because training data is extremely unbalanced 
         'reg_alpha': 0.1
@@ -418,12 +417,12 @@ def DO(frm,to,fileno,use_all_agg=True):
 nrows=184903891-1
 frm=nrows-110000000
 nchunk=100000000
-val_size=30000000
+val_size=20000000
 use_all_agg = True
 
 # use all train data
-frm=0
-nchunk=nrows
+#frm=0
+#nchunk=nrows
 
 if debug:
     frm=0
