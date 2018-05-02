@@ -319,6 +319,8 @@ def DO(frm,to,fileno,use_all_agg=True):
     train_df = do_next_Click(train_df, ['ip', 'os', 'app', 'device'], frm_to); gc.collect()
     train_df = do_next_Click(train_df, ['device','channel'], frm_to); gc.collect()
     train_df = do_next_Click(train_df, ['app', 'device', 'channel'], frm_to); gc.collect()
+    train_df = do_next_Click(train_df, ['device'], frm_to); gc.collect()
+    train_df = do_next_Click(train_df, ['device', 'hour'], frm_to); gc.collect()
 
     #train_df = do_prev_Click(train_df, ['ip', 'app', 'device', 'os', 'channel'], frm_to); gc.collect()
     #train_df = do_prev_Click(train_df, ['ip', 'os', 'device'], frm_to); gc.collect()
@@ -349,9 +351,9 @@ def DO(frm,to,fileno,use_all_agg=True):
     train_df = do_var( train_df, ['ip', 'day', 'channel'], 'hour', frm_to); gc.collect()
     train_df = do_var( train_df, ['ip', 'app', 'os'], 'hour', frm_to); gc.collect()
     train_df = do_var( train_df, ['ip', 'app', 'channel'], 'day', frm_to); gc.collect()
-    train_df = do_mean( train_df, ['ip', 'app', 'channel'], 'hour', frm_to); gc.collect()
-    train_df = do_mean( train_df, ['ip', 'app', 'os'], 'hour', frm_to); gc.collect()
-    train_df = do_mean( train_df, ['ip', 'app', 'channel'], 'day', frm_to); gc.collect()
+#    train_df = do_mean( train_df, ['ip', 'app', 'channel'], 'hour', frm_to); gc.collect()
+#    train_df = do_mean( train_df, ['ip', 'app', 'os'], 'hour', frm_to); gc.collect()
+#    train_df = do_mean( train_df, ['ip', 'app', 'channel'], 'day', frm_to); gc.collect()
     
     logger.debug(train_df.head(5))
     gc.collect()
