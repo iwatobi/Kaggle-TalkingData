@@ -405,7 +405,7 @@ def DO(frm,to,fileno,use_all_agg=True):
                             target, 
                             objective='binary', 
                             metrics='auc',
-                            early_stopping_rounds=30, 
+                            early_stopping_rounds=50, 
                             verbose_eval=True, 
                             num_boost_round=5000, 
                             categorical_features=categorical)
@@ -415,6 +415,13 @@ def DO(frm,to,fileno,use_all_agg=True):
     del val_df
     gc.collect()
 
+    imp = zip(bst.feature_name(), bst.feature_importance(importance_type='split'))
+    imp = sorted(imp, key=lambda x:-x[1])
+    logger.info('feature importances(split): {}'.format(imp))
+
+    imp = zip(bst.feature_name(), bst.feature_importance(importance_type='gain'))
+    imp = sorted(imp, key=lambda x:-x[1])
+    logger.info('feature importances(gain): {}'.format(imp))
 
 #    ax = lgb.plot_importance(bst, max_num_features=100)
 #    plt.show()
