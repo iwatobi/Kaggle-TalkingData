@@ -271,12 +271,13 @@ def lgb_modelfit_nocv(params, dtrain, dvalid, predictors, target='target', objec
                      early_stopping_rounds=early_stopping_rounds,
                      verbose_eval=10, 
                      feval=feval)
+    score = evals_results['valid'][metrics][bst1.best_iteration-1]
 
     logger.info("Model Report")
     logger.info("bst1.best_iteration: {}".format(bst1.best_iteration))
-    logger.info("{}: {}".format(metrics, evals_results['valid'][metrics][bst1.best_iteration-1]))
+    logger.info("{}: {}".format(metrics, score))
 
-    return (bst1,bst1.best_iteration)
+    return (bst1, bst1.best_iteration, score)
     
 ## Running the full calculation.
 
@@ -319,8 +320,8 @@ def DO(frm,to,fileno,use_all_agg=True):
     train_df = do_next_Click(train_df, ['ip', 'os', 'app', 'device'], frm_to); gc.collect()
     train_df = do_next_Click(train_df, ['device','channel'], frm_to); gc.collect()
     train_df = do_next_Click(train_df, ['app', 'device', 'channel'], frm_to); gc.collect()
-    train_df = do_next_Click(train_df, ['device'], frm_to); gc.collect()
-    train_df = do_next_Click(train_df, ['device', 'hour'], frm_to); gc.collect()
+    #train_df = do_next_Click(train_df, ['device'], frm_to); gc.collect()
+    #train_df = do_next_Click(train_df, ['device', 'hour'], frm_to); gc.collect()
 
     #train_df = do_prev_Click(train_df, ['ip', 'app', 'device', 'os', 'channel'], frm_to); gc.collect()
     #train_df = do_prev_Click(train_df, ['ip', 'os', 'device'], frm_to); gc.collect()
@@ -385,30 +386,53 @@ def DO(frm,to,fileno,use_all_agg=True):
     start_time = time.time()
 
     params = {
-        'learning_rate': 0.15,
+        'learning_rate': 0.1,
         #'is_unbalance': 'true', # replaced with scale_pos_weight argument
-        'num_leaves': 7,  # 2^max_depth - 1
-        'max_depth': 3,  # -1 means no limit
-        'min_child_samples': 100,  # Minimum number of data need in a child(min_data_in_leaf)
+        'num_leaves': 31,  # 2^max_depth - 1
+        'max_depth': 5,  # -1 means no limit
+        'min_child_samples': 20,  # Minimum number of data need in a child(min_data_in_leaf)
         'max_bin': 100,  # Number of bucketed bin for feature values
-        'subsample': 0.6,  # Subsample ratio of the training instance.
+        'subsample': 0.8,  # Subsample ratio of the training instance.
         'subsample_freq': 1,  # frequence of subsample, <=0 means no enable
         'colsample_bytree': 0.3,  # Subsample ratio of columns when constructing each tree.
         'min_child_weight': 0,  # Minimum sum of instance weight(hessian) needed in a child(leaf)
         'scale_pos_weight':200, # because training data is extremely unbalanced 
         'reg_alpha': 0.1
     }
-    (bst,best_iteration) = lgb_modelfit_nocv(params, 
-                            train_df, 
-                            val_df, 
-                            predictors, 
-                            target, 
-                            objective='binary', 
-                            metrics='auc',
-                            early_stopping_rounds=50, 
-                            verbose_eval=True, 
-                            num_boost_round=5000, 
-                            categorical_features=categorical)
+
+    search_colsample_bytree = [0.3]
+    search_reg_alpha = [1]
+    search_max_depth = [5]
+    bst = None
+    best_params = None
+    best_iteration = 0
+    best_score = -1
+
+    for cb in search_colsample_bytree:
+        for ra in search_reg_alpha:
+            for md in search_max_depth:
+                params['colsample_bytree'] = cb
+                params['reg_alpha'] = ra
+                params['max_depth'] = md
+                params['num_leaves'] = 2 ** md -1
+                (bst1, best_iteration1, auc) = lgb_modelfit_nocv(params, 
+                                        train_df, 
+                                        val_df, 
+                                        predictors, 
+                                        target, 
+                                        objective='binary', 
+                                        metrics='auc',
+                                        early_stopping_rounds=50, 
+                                        verbose_eval=True, 
+                                        num_boost_round=5000, 
+                                        categorical_features=categorical)
+                logger.info('+ colsample_bytree={}, reg_alpha={}, max_depth={}, : auc = {}'.format(cb, ra, md, auc))
+                if auc > best_score:
+                    bst = bst1
+                    best_params = params
+                    best_iteration = best_iteration1
+                    best_score = auc
+                logger.info('+ current_best_score={}, params={}'.format(best_score, best_params))
 
     logger.info('[{}]: model training time'.format(time.time() - start_time))
     del train_df
