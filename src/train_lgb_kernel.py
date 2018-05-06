@@ -39,8 +39,8 @@ def do_datetime(df):
 
     df['hour'] = pd.to_datetime(df.click_time).dt.hour.astype('int8')
     df['day'] = pd.to_datetime(df.click_time).dt.day.astype('int8')
-    df['minute'] = pd.to_datetime(df.click_time).dt.minute.astype('int8')
-    df['second'] = pd.to_datetime(df.click_time).dt.second.astype('int8')
+#    df['minute'] = pd.to_datetime(df.click_time).dt.minute.astype('int8')
+#    df['second'] = pd.to_datetime(df.click_time).dt.second.astype('int8')
     df['dayofweek'] = pd.to_datetime(df.click_time).dt.dayofweek.astype('int8')
 
     return df
@@ -216,33 +216,8 @@ def do_var( df, group_cols, counted, frm_to, agg_type='float32', show_max=False,
 if debug:
     logger.info('*** debug parameter set: this is a test run for debugging purposes ***')
 
-def lgb_modelfit_nocv(params, dtrain, dvalid, predictors, target='target', objective='binary', metrics='auc',
+def lgb_modelfit_nocv(lgb_params, dtrain, dvalid, predictors, target='target', metrics='auc',
                  feval=None, early_stopping_rounds=50, num_boost_round=3000, verbose_eval=10, categorical_features=None):
-    nthread = int(cpu_count() * 0.75)
-    lgb_params = {
-        'boosting_type': 'gbdt',
-        'objective': objective,
-        'metric':metrics,
-        'learning_rate': 0.05,
-        #'is_unbalance': 'true',  #because training data is unbalance (replaced with scale_pos_weight)
-        'num_leaves': 31,  # we should let it be smaller than 2^(max_depth)
-        'max_depth': -1,  # -1 means no limit
-        'min_child_samples': 20,  # Minimum number of data need in a child(min_data_in_leaf)
-        'max_bin': 255,  # Number of bucketed bin for feature values
-        'subsample': 0.6,  # Subsample ratio of the training instance.
-        'subsample_freq': 0,  # frequence of subsample, <=0 means no enable
-        'colsample_bytree': 0.3,  # Subsample ratio of columns when constructing each tree.
-        'min_child_weight': 5,  # Minimum sum of instance weight(hessian) needed in a child(leaf)
-        'subsample_for_bin': 200000,  # Number of samples for constructing bin
-        'min_split_gain': 0,  # lambda_l1, lambda_l2 and min_gain_to_split to regularization
-        'reg_alpha': 0,  # L1 regularization term on weights
-        'reg_lambda': 0,  # L2 regularization term on weights
-        'nthread': nthread,
-        'verbose': 0,
-    }
-
-    lgb_params.update(params)
-
     logger.info("preparing validation datasets")
 
     xgtrain = lgb.Dataset(dtrain[predictors].values, label=dtrain[target].values,
@@ -277,8 +252,35 @@ def lgb_modelfit_nocv(params, dtrain, dvalid, predictors, target='target', objec
     logger.info("bst1.best_iteration: {}".format(bst1.best_iteration))
     logger.info("{}: {}".format(metrics, score))
 
+    del xgtrain
+    del xgvalid
+    gc.collect()
+
     return (bst1, bst1.best_iteration, score)
-    
+
+
+def lgb_modelfit_wo_valid(lgb_params, dtrain, predictors, target='target',
+                 num_boost_round=3000, verbose_eval=10, categorical_features=None):
+    logger.info("preparing validation datasets")
+
+    xgtrain = lgb.Dataset(dtrain[predictors].values, label=dtrain[target].values,
+                          feature_name=predictors,
+                          categorical_feature=categorical_features
+                          )
+    del dtrain
+    gc.collect()
+
+    bst1 = lgb.train(lgb_params, 
+                     xgtrain, 
+                     num_boost_round=num_boost_round,
+                     verbose_eval=10)
+
+    del xgtrain
+    gc.collect()
+
+    return bst1
+
+
 ## Running the full calculation.
 
 #### A function is written here to run the full calculation with defined parameters.
@@ -362,11 +364,13 @@ def DO(frm,to,fileno,use_all_agg=True):
     
     logger.info('Before appending predictors... {}'.format(sorted(predictors)))
     target = 'is_attributed'
-    word= ['app','device','os', 'channel', 'hour', 'day','minute', 'second', 'dayofweek']
+    #word= ['app','device','os', 'channel', 'hour', 'day','minute', 'second', 'dayofweek']
+    word= ['app','device','os', 'channel', 'hour', 'dayofweek']
     for feature in word:
         if feature not in predictors:
             predictors.append(feature)
-    categorical = ['app', 'device', 'os', 'channel', 'hour', 'day','minute', 'second', 'dayofweek']
+    #categorical = ['app', 'device', 'os', 'channel', 'hour', 'day','minute', 'second', 'dayofweek']
+    categorical = ['app', 'device', 'os', 'channel', 'hour', 'dayofweek']
     logger.info('After appending predictors... {}'.format(sorted(predictors)))
 
     test_df = train_df[len_train:]
@@ -377,62 +381,52 @@ def DO(frm,to,fileno,use_all_agg=True):
     logger.info("valid size: {}".format(len(val_df)))
     logger.info("test size : {}".format(len(test_df)))
 
+    with open('../features/train_df.pkl', 'wb') as f:
+        pickle.dump(train_df, f, protocol=4)
+    with open('../features/val_df.pkl', 'wb') as f:
+        pickle.dump(val_df, f, protocol=4)
     with open('../features/test_df.pkl', 'wb') as f:
-        pickle.dump(test_df, f)
+        pickle.dump(test_df, f, protocol=4)
     del test_df
     gc.collect()
 
     logger.info("Training...")
     start_time = time.time()
 
+    nthread = int(cpu_count() * 0.75)
     params = {
-        'learning_rate': 0.1,
-        #'is_unbalance': 'true', # replaced with scale_pos_weight argument
-        'num_leaves': 31,  # 2^max_depth - 1
-        'max_depth': 5,  # -1 means no limit
-        'min_child_samples': 20,  # Minimum number of data need in a child(min_data_in_leaf)
+        'boosting_type': 'gbdt',
+        'objective': 'binary',
+        'metric': 'auc',
+        'learning_rate': 0.05,
+        #'is_unbalance': 'true',  #because training data is unbalance (replaced with scale_pos_weight)
+        'num_leaves': 50,  # we should let it be smaller than 2^(max_depth)
+        'max_depth': 7,  # -1 means no limit
+        'min_child_samples': 10,  # Minimum number of data need in a child(min_data_in_leaf)
         'max_bin': 100,  # Number of bucketed bin for feature values
         'subsample': 0.8,  # Subsample ratio of the training instance.
         'subsample_freq': 1,  # frequence of subsample, <=0 means no enable
         'colsample_bytree': 0.3,  # Subsample ratio of columns when constructing each tree.
         'min_child_weight': 0,  # Minimum sum of instance weight(hessian) needed in a child(leaf)
+        'subsample_for_bin': 200000,  # Number of samples for constructing bin
+        'min_split_gain': 0,  # lambda_l1, lambda_l2 and min_gain_to_split to regularization
         'scale_pos_weight':200, # because training data is extremely unbalanced 
-        'reg_alpha': 0.1
+        'reg_alpha': 1,  # L1 regularization term on weights
+        'reg_lambda': 0,  # L2 regularization term on weights
+        'nthread': nthread,
+        'verbose': 0
     }
 
-    search_colsample_bytree = [0.3]
-    search_reg_alpha = [1]
-    search_max_depth = [5]
-    bst = None
-    best_params = None
-    best_iteration = 0
-    best_score = -1
-
-    for cb in search_colsample_bytree:
-        for ra in search_reg_alpha:
-            for md in search_max_depth:
-                params['colsample_bytree'] = cb
-                params['reg_alpha'] = ra
-                params['max_depth'] = md
-                params['num_leaves'] = 2 ** md -1
-                (bst1, best_iteration1, auc) = lgb_modelfit_nocv(params, 
-                                        train_df, 
-                                        val_df, 
-                                        predictors, 
-                                        target, 
-                                        objective='binary', 
-                                        metrics='auc',
-                                        early_stopping_rounds=50, 
-                                        verbose_eval=True, 
-                                        num_boost_round=5000, 
-                                        categorical_features=categorical)
-                logger.info('+ colsample_bytree={}, reg_alpha={}, max_depth={}, : auc = {}'.format(cb, ra, md, auc))
-                if auc > best_score:
-                    bst = bst1
-                    best_params = params
-                    best_iteration = best_iteration1
-                    best_score = auc
-                logger.info('+ current_best_score={}, params={}'.format(best_score, best_params))
+    (bst, best_iteration, best_score) = lgb_modelfit_nocv(params, 
+                            train_df, 
+                            val_df, 
+                            predictors, 
+                            target, 
+                            early_stopping_rounds=50, 
+                            verbose_eval=True, 
+                            num_boost_round=5000, 
+                            categorical_features=categorical)
+    logger.info('+ auc={}, params={}'.format(best_score, params))
 
     logger.info('[{}]: model training time'.format(time.time() - start_time))
     del train_df
@@ -454,15 +448,51 @@ def DO(frm,to,fileno,use_all_agg=True):
     logger.info("Predicting...")
     with open('../features/test_df.pkl', 'rb') as f:
         test_df = pickle.load(f)
-    os.remove('../features/test_df.pkl')
     sub = pd.DataFrame()
     sub['click_id'] = test_df['click_id'].astype('int')
     sub['is_attributed'] = bst.predict(test_df[predictors],num_iteration=best_iteration)
 #     if not debug:
 #         logger.info("writing...")
-    sub.to_csv('../output/sub_it%d.csv.gz'%(fileno),index=False,float_format='%.9f',compression='gzip')
+    sub.to_csv('../output/sub.csv.gz',index=False,float_format='%.9f',compression='gzip')
+
+    del bst
+    del test_df
+    del sub
+    gc.collect()
+
+    logger.info('Train all data')
+    with open('../features/train_df.pkl', 'rb') as f:
+        train_df = pickle.load(f)
+    with open('../features/val_df.pkl', 'rb') as f:
+        val_df = pickle.load(f)
+    train_df = train_df.append(val_df)
+    del val_df
+    gc.collect()
+
+    bst = lgb_modelfit_wo_valid(params, 
+                                train_df, 
+                                predictors, 
+                                target, 
+                                num_boost_round=best_iteration, 
+                                categorical_features=categorical)
+    del train_df
+    gc.collect()
+
+    logger.info("Predicting...")
+    with open('../features/test_df.pkl', 'rb') as f:
+        test_df = pickle.load(f)
+    sub = pd.DataFrame()
+    sub['click_id'] = test_df['click_id'].astype('int')
+    sub['is_attributed'] = bst.predict(test_df[predictors],num_iteration=best_iteration)
+#     if not debug:
+#         logger.info("writing...")
+    sub.to_csv('../output/sub_all.csv.gz',index=False,float_format='%.9f',compression='gzip')
+
+    os.remove('../features/train_df.pkl')
+    os.remove('../features/val_df.pkl')
+    os.remove('../features/test_df.pkl')
+
     logger.info("done...")
-    return sub
     
     
 ####### Chunk size defining and final run  ############
