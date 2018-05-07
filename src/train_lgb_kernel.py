@@ -39,8 +39,8 @@ def do_datetime(df):
 
     df['hour'] = pd.to_datetime(df.click_time).dt.hour.astype('int8')
     df['day'] = pd.to_datetime(df.click_time).dt.day.astype('int8')
-#    df['minute'] = pd.to_datetime(df.click_time).dt.minute.astype('int8')
-#    df['second'] = pd.to_datetime(df.click_time).dt.second.astype('int8')
+    df['minute'] = pd.to_datetime(df.click_time).dt.minute.astype('int8')
+    df['second'] = pd.to_datetime(df.click_time).dt.second.astype('int8')
     df['dayofweek'] = pd.to_datetime(df.click_time).dt.dayofweek.astype('int8')
 
     return df
@@ -244,6 +244,7 @@ def lgb_modelfit_nocv(lgb_params, dtrain, dvalid, predictors, target='target', m
                      evals_result=evals_results, 
                      num_boost_round=num_boost_round,
                      early_stopping_rounds=early_stopping_rounds,
+                     learning_rates=lambda iter: 0.10 * (0.998 ** iter),
                      verbose_eval=10, 
                      feval=feval)
     score = evals_results['valid'][metrics][bst1.best_iteration-1]
@@ -273,6 +274,7 @@ def lgb_modelfit_wo_valid(lgb_params, dtrain, predictors, target='target',
     bst1 = lgb.train(lgb_params, 
                      xgtrain, 
                      num_boost_round=num_boost_round,
+                     learning_rates=lambda iter: 0.10 * (0.998 ** iter),
                      verbose_eval=10)
 
     del xgtrain
@@ -364,13 +366,13 @@ def DO(frm,to,fileno,use_all_agg=True):
     
     logger.info('Before appending predictors... {}'.format(sorted(predictors)))
     target = 'is_attributed'
-    #word= ['app','device','os', 'channel', 'hour', 'day','minute', 'second', 'dayofweek']
-    word= ['app','device','os', 'channel', 'hour', 'dayofweek']
+    word= ['app','device','os', 'channel', 'hour', 'day','minute', 'second', 'dayofweek']
+    #word= ['app','device','os', 'channel', 'hour', 'dayofweek']
     for feature in word:
         if feature not in predictors:
             predictors.append(feature)
-    #categorical = ['app', 'device', 'os', 'channel', 'hour', 'day','minute', 'second', 'dayofweek']
-    categorical = ['app', 'device', 'os', 'channel', 'hour', 'dayofweek']
+    categorical = ['app', 'device', 'os', 'channel', 'hour', 'day','minute', 'second', 'dayofweek']
+    #categorical = ['app', 'device', 'os', 'channel', 'hour', 'dayofweek']
     logger.info('After appending predictors... {}'.format(sorted(predictors)))
 
     test_df = train_df[len_train:]
@@ -398,7 +400,7 @@ def DO(frm,to,fileno,use_all_agg=True):
         'boosting_type': 'gbdt',
         'objective': 'binary',
         'metric': 'auc',
-        'learning_rate': 0.05,
+        #'learning_rate': 0.01,
         #'is_unbalance': 'true',  #because training data is unbalance (replaced with scale_pos_weight)
         'num_leaves': 50,  # we should let it be smaller than 2^(max_depth)
         'max_depth': 7,  # -1 means no limit
